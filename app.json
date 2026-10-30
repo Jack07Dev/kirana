@@ -1,13 +1,19 @@
 {
   "expo": {
-    "name": "kirana",
+    "name": "Kirana",
     "slug": "kirana",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "kirana",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Find kirana stores that deliver to your location.",
+        "NSCameraUsageDescription": "Scan product barcodes for your store inventory.",
+        "NSPhotoLibraryUsageDescription": "Add photos for your store and products."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +22,49 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Find nearby kirana stores that deliver to you."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2E7D32"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan barcodes to add products quickly."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Upload store and product photos."
+        }
+      ],
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
