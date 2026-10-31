@@ -9,9 +9,10 @@
     "@supabase/supabase-js": "^2.118.0",
     "date-fns": "^4.4.0",
     "expo": "~58.0.21",
-    "expo-av": "^16.0.8",
+    "expo-audio": "~58.0.10",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.14",
+    "expo-dev-client": "~58.0.17",
     "expo-device": "~58.0.5",
     "expo-document-picker": "~58.0.4",
     "expo-font": "^58.0.11",
@@ -26,7 +27,8 @@
     "expo-status-bar": "~58.0.4",
     "i18next": "^26.5.12",
     "papaparse": "^5.7.0",
-    "react": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "react-i18next": "^17.1.9",
     "react-native": "0.88.1",
     "react-native-gesture-handler": "~3.3.0",
@@ -35,6 +37,7 @@
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-web": "^0.21.4",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
@@ -48,7 +51,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:8081": "expo start --web --port 8081"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
 }

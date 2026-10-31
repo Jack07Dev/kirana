@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
+import { router } from 'expo-router';
+import { requestPhoneOtp, verifyPhoneOtp } from '../lib/phoneAuth';
 import { supabase } from '../lib/supabase';
-import { toE164India } from '../lib/format';
 import type { Store, User, UserRole } from '../types/database';
 import i18n from '../i18n';
 
@@ -47,23 +48,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   sendOtp: async (phone) => {
     set({ loading: true });
-    const e164 = toE164India(phone);
-    const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
-    set({ loading: false, otpSent: !error, phone: e164 });
-    if (error) return { error: error.message };
+    const res = await requestPhoneOtp(phone);
+    set({ loading: false });
+    if (res.error) return { error: res.error };
+    if (res.e164) set({ phone: res.e164, otpSent: true });
     return {};
   },
 
   verifyOtp: async (otp) => {
-    set({ loading: true });
     const { phone } = get();
-    const { error } = await supabase.auth.verifyOtp({
-      phone,
-      token: otp,
-      type: 'sms',
-    });
-    set({ loading: false });
-    if (error) return { error: error.message };
+    if (!phone) return { error: 'required' };
+
+    set({ loading: true });
+    const result = await verifyPhoneOtp(phone, otp);
+    if (result.error) {
+      set({ loading: false });
+      return { error: result.error };
+    }
+
+    const { data } = await supabase.auth.getSession();
+    set({ session: data.session, loading: false });
     await get().refreshProfile();
     return {};
   },
@@ -121,12 +125,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const uid = get().session?.user?.id;
     if (uid) {
       await supabase.from('users').update({ preferred_lang: lang }).eq('id', uid);
-      set({ user: get().user ? { ...get().user!, preferred_lang: lang } : null });
     }
+    set({
+      user: get().user ? { ...get().user!, preferred_lang: lang } : null,
+    });
   },
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ session: null, user: null, store: null, otpSent: false, phone: '' });
+    set({
+      session: null,
+      user: null,
+      store: null,
+      otpSent: false,
+      phone: '',
+    });
+    router.replace('/(auth)/phone');
   },
 }));

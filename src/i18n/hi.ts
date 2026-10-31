@@ -43,6 +43,23 @@ export default {
   success: 'सफल',
   noResults: 'कोई परिणाम नहीं',
   required: 'ज़रूरी',
+  supabaseMissingUrl:
+    'Supabase URL नहीं मिला। .env में EXPO_PUBLIC_SUPABASE_URL डालें, फिर npx expo start -c',
+  supabaseMissingKey:
+    'Anon key नहीं मिली। Supabase Dashboard → Settings → API से eyJ… key .env में डालें।',
+  supabaseBadKey:
+    'Anon key Supabase की JWT होनी चाहिए (eyJ…), random string नहीं।',
+  supabaseLocalOnPhone:
+    'फ़ोन पर 127.0.0.1 काम नहीं करता। https://YOUR_PROJECT.supabase.co या Mac का Wi‑Fi IP इस्तेमाल करें।',
+  supabaseNetwork:
+    'Supabase से कनेक्ट नहीं हुआ। .env, Wi‑Fi और Supabase (cloud/Docker) जाँचें।',
+  supabasePhoneProvider:
+    'SMS सेटअप: Supabase → Auth → Hooks → Send SMS + send-sms (Fast2SMS). docs/PHONE_AUTH.md देखें।',
+  supabaseSmsHookFailed:
+    'SMS नहीं भेजा जा सका। असली +91 नंबर (9876543210 नहीं), Fast2SMS wallet ≥ ₹100, hook secret CLI से मिलान। docs/FIX_NOW.md',
+  fast2smsWallet:
+    'Fast2SMS: API के लिए पहले wallet में कम से कम ₹100 जोड़ें (एक बार)। fast2sms.com पर top-up करें।',
+  otpRateLimit: 'बहुत बार OTP माँगा। एक मिनट रुकें और फिर कोशिश करें।',
 
   tabDashboard: 'होम',
   tabOrders: 'ऑर्डर',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,10 +12,13 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input, textStyles } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
+import { resolveAuthErrorKey } from '../../src/lib/authErrors';
+import { getSupabaseConfigIssue } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
 
 export default function PhoneScreen() {
   const { t, i18n } = useTranslation();
+  const configIssue = useMemo(() => getSupabaseConfigIssue(), []);
   const sendOtp = useAuthStore((s) => s.sendOtp);
   const loading = useAuthStore((s) => s.loading);
   const setLanguage = useAuthStore((s) => s.setLanguage);
@@ -31,7 +34,7 @@ export default function PhoneScreen() {
     setError('');
     const res = await sendOtp(digits);
     if (res.error) {
-      setError(res.error);
+      setError(resolveAuthErrorKey(t, res.error));
       return;
     }
     router.push('/(auth)/otp');
@@ -61,6 +64,12 @@ export default function PhoneScreen() {
           <Text style={textStyles.brand}>{t('appName')}</Text>
           <Text style={styles.tagline}>{t('tagline')}</Text>
         </View>
+
+        {configIssue ? (
+          <View style={styles.configBanner}>
+            <Text style={styles.configText}>{resolveAuthErrorKey(t, configIssue)}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.form}>
           <Input
@@ -103,4 +112,13 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
   form: { paddingBottom: spacing.xl },
+  configBanner: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  configText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
 });

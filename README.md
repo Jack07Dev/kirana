@@ -41,7 +41,7 @@ RPC: `nearby_stores(lat, lng)` — online stores whose radius covers the custome
 
 ## UI flow (summary)
 
-**Auth:** Phone → OTP → Choose owner/customer + name → Owner: store setup if new → respective tab home.
+**Auth:** Phone → OTP (SMS via Fast2SMS) → Choose owner/customer + name → Owner: store setup if new → respective tab home.
 
 **Owner:** Dashboard (live pending orders + sound) → Orders → Products (catalog / manual / barcode / CSV) → Khata → Store (online toggle, radius, UPI, language).
 
@@ -52,7 +52,8 @@ RPC: `nearby_stores(lat, lng)` — online stores whose radius covers the custome
 ### 1. Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Enable **Phone** auth (SMS provider: Twilio / MessageBird / etc.).
+2. **Phone auth stuck?** [`docs/FIX_NOW.md`](docs/FIX_NOW.md) — then [`docs/SETUP_STEP_BY_STEP.md`](docs/SETUP_STEP_BY_STEP.md) if needed.
+3. **Push / dev build (not Expo Go):** [`docs/DEV_BUILD.md`](docs/DEV_BUILD.md)
 3. SQL Editor → run migrations in order:
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rls_policies.sql`
@@ -74,17 +75,22 @@ npx supabase functions deploy notify-order-status
 ```bash
 cp .env.example .env   # fill Supabase keys
 npm install
-npx expo start
+npx expo start         # then press w for web, or:
+npm run web            # opens browser directly
 ```
+
+**Web + local Supabase:** In the browser on your Mac, `EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` works (unlike on a physical phone). Run `npx supabase start` and use the **anon** key from CLI output (`eyJ…`).
+
+**iPhone:** Use cloud `https://….supabase.co` or your Mac’s LAN IP—not `127.0.0.1`.
 
 Use a **development build** for camera, push, and full notification behaviour (`npx expo run:ios` / `run:android` or EAS).
 
 ### 3. Verify auth + store flow
 
-1. Sign in with phone OTP.
-2. Choose **Store owner**, complete setup (location + radius required).
-3. Add products from catalog or manual form; toggle **Online** on Store tab.
-4. As **Customer** (second device/number), allow location — store appears if within radius.
+1. `npx expo start -c` → **Send OTP** on your phone (Fast2SMS SMS).
+2. Enter code → choose **Store owner**, complete setup (location + radius required).
+3. Add products; toggle **Online** on Store tab.
+4. As **Customer** (second number), allow location — store appears if within radius.
 
 ### 4. Deployment (optional)
 

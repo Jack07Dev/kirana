@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const extra = Constants.expoConfig?.extra ?? {};
 
@@ -33,6 +34,31 @@ export const supabase = createClient(
     },
   }
 );
+
+/** Human-readable hint when OTP/API calls fail on device */
+export function getSupabaseConfigIssue(): string | null {
+  const url = supabaseUrl.trim();
+  const key = supabaseAnonKey.trim();
+
+  if (!url || url.includes('placeholder')) {
+    return 'missingUrl';
+  }
+  if (!key || key === 'placeholder') {
+    return 'missingKey';
+  }
+  if (!key.startsWith('eyJ')) {
+    return 'badKey';
+  }
+  const isLocal = url.includes('127.0.0.1') || url.includes('localhost');
+  if (isLocal && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+    return 'localOnPhone';
+  }
+  return null;
+}
+
+export function isUsingPlaceholderSupabase(): boolean {
+  return getSupabaseConfigIssue() !== null;
+}
 
 /** Insert/update geography as WKT via RPC-friendly raw SQL helper */
 export function geoPoint(lat: number, lng: number) {

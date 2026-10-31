@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "imports": {
+    "standardwebhooks": "https://esm.sh/standardwebhooks@1.0.0"
+  }
+}

@@ -45,6 +45,23 @@ export default {
   success: 'Success',
   noResults: 'No results found',
   required: 'Required',
+  supabaseMissingUrl:
+    'Supabase URL missing. Add EXPO_PUBLIC_SUPABASE_URL to .env and restart with: npx expo start -c',
+  supabaseMissingKey:
+    'Supabase anon key missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY to .env (Dashboard → Settings → API).',
+  supabaseBadKey:
+    'Anon key must be the JWT from Supabase (starts with eyJ…), not a random string.',
+  supabaseLocalOnPhone:
+    'On a real phone, 127.0.0.1 does not work. Use https://YOUR_PROJECT.supabase.co or your Mac Wi‑Fi IP with local Supabase.',
+  supabaseNetwork:
+    'Could not reach Supabase. Check .env URL/key, Wi‑Fi, and that Supabase is running (cloud or Docker).',
+  supabasePhoneProvider:
+    'Set up SMS: Supabase → Auth → Hooks → Send SMS + deploy send-sms (Fast2SMS). See docs/PHONE_AUTH.md.',
+  supabaseSmsHookFailed:
+    'SMS could not be sent. Use your real +91 mobile (not 9876543210), Fast2SMS wallet ≥ ₹100, and match Send SMS hook secret with CLI. See docs/FIX_NOW.md.',
+  fast2smsWallet:
+    'Fast2SMS requires at least ₹100 added to your wallet once before the API can send SMS. Top up at fast2sms.com, then try Send OTP again.',
+  otpRateLimit: 'Too many OTP requests. Wait a minute and try again.',
 
   // Owner tabs
   tabDashboard: 'Home',

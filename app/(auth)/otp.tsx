@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input, textStyles } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
+import { resolveAuthErrorKey } from '../../src/lib/authErrors';
+import { formatPhone } from '../../src/lib/format';
 import { useAuthStore } from '../../src/stores/authStore';
 
 export default function OtpScreen() {
@@ -17,23 +19,31 @@ export default function OtpScreen() {
   const [error, setError] = useState('');
 
   const onVerify = async () => {
-    if (otp.length < 6) {
+    if (otp.replace(/\D/g, '').length < 6) {
       setError(t('required'));
       return;
     }
     const res = await verifyOtp(otp);
     if (res.error) {
-      setError(res.error);
+      setError(resolveAuthErrorKey(t, res.error));
       return;
     }
     router.replace('/');
+  };
+
+  const onResend = async () => {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    if (digits.length !== 10) return;
+    setError('');
+    const res = await sendOtp(digits);
+    if (res.error) setError(resolveAuthErrorKey(t, res.error));
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <Text style={textStyles.h1}>{t('enterOtp')}</Text>
-        <Text style={styles.sub}>{t('otpSent', { phone })}</Text>
+        <Text style={styles.sub}>{t('otpSent', { phone: formatPhone(phone) })}</Text>
         <Input
           keyboardType="number-pad"
           maxLength={6}
@@ -45,11 +55,7 @@ export default function OtpScreen() {
         />
         <Button title={t('verifyOtp')} onPress={onVerify} loading={loading} />
         <View style={{ height: spacing.md }} />
-        <Button
-          title={t('resendOtp')}
-          variant="ghost"
-          onPress={() => sendOtp(phone)}
-        />
+        <Button title={t('resendOtp')} variant="ghost" onPress={onResend} loading={loading} />
       </View>
     </SafeAreaView>
   );
