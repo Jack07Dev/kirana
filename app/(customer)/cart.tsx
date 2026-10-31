@@ -1,16 +1,17 @@
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { OptimizedList } from '../../src/components/OptimizedList';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Button, EmptyState } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
 import { formatINR } from '../../src/lib/format';
-import { useCartStore } from '../../src/stores/cartStore';
+import { cartSelectors, useCartStore } from '../../src/stores/cartStore';
 
 export default function CartScreen() {
   const { t } = useTranslation();
   const items = useCartStore((s) => s.items);
   const setQty = useCartStore((s) => s.setQty);
-  const subtotal = useCartStore((s) => s.subtotal());
+  const subtotal = useCartStore(cartSelectors.subtotal);
 
   if (!items.length) {
     return (
@@ -22,8 +23,10 @@ export default function CartScreen() {
 
   return (
     <View style={styles.screen}>
-      <FlatList
+      <OptimizedList
+        flex
         data={items}
+        estimatedItemSize={88}
         keyExtractor={(i) => i.product.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (

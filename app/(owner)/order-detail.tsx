@@ -4,25 +4,28 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
+import { useOrderLiveSync } from '../../src/hooks/useOrderLiveSync';
 import { formatINR, ORDER_STATUS_LABELS } from '../../src/lib/format';
-import { fetchOrder, updateOrderStatus } from '../../src/lib/api';
+import { confirmOrderPayment, fetchOrder, updateOrderStatus } from '../../src/lib/api';
+import { notifyLocal } from '../../src/lib/notifications';
 import type { Order } from '../../src/types/database';
 
 export default function OrderDetail() {
   const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
+  const [confirmingPay, setConfirmingPay] = useState(false);
   const lang = i18n.language === 'hi' ? 'hi' : 'en';
 
-  const load = useCallback(() => {
-    if (!id) return;
-    void fetchOrder(id).then(({ data }) => setOrder(data));
-  }, [id]);
+  useOrderLiveSync(id, setOrder);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      if (!id) return;
+      void fetchOrder(id).then(({ data }) => {
+        if (data) setOrder(data);
+      });
+    }, [id])
   );
 
   if (!order) return <View style={styles.screen} />;
@@ -31,8 +34,23 @@ export default function OrderDetail() {
   const setStatus = async (status: Order['status']) => {
     const { error } = await updateOrderStatus(order.id, status);
     if (error) Alert.alert(t('error'), error.message);
-    else load();
+    else if (id) void fetchOrder(id).then(({ data }) => data && setOrder(data));
   };
+
+  const onConfirmPayment = async () => {
+    setConfirmingPay(true);
+    const { data, error } = await confirmOrderPayment(order.id);
+    setConfirmingPay(false);
+    if (error) Alert.alert(t('error'), error.message);
+    else {
+      if (data) setOrder({ ...order, ...data });
+      void notifyLocal(t('paymentSuccessBoth'), order.order_number);
+      Alert.alert(t('paymentSuccessBoth'), order.order_number);
+    }
+  };
+
+  const needsPaymentConfirm =
+    order.payment_method === 'upi' && order.payment_status === 'pending';
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -40,6 +58,12 @@ export default function OrderDetail() {
         <Text style={styles.num}>{order.order_number}</Text>
         <Badge text={st?.[lang] ?? order.status} color={st?.color} />
       </View>
+
+      {order.payment_method === 'upi' && order.payment_status === 'paid' ? (
+        <View style={[styles.banner, styles.success]}>
+          <Text style={styles.bannerTitle}>{t('paymentSuccessBoth')}</Text>
+        </View>
+      ) : null}
 
       {(order.items ?? []).map((item) => (
         <View key={item.id} style={styles.line}>
@@ -56,7 +80,26 @@ export default function OrderDetail() {
         <Row label={t('platformFee')} value={formatINR(Number(order.platform_fee))} />
         <Row label={t('total')} value={formatINR(Number(order.total))} bold />
         <Row label={t('payment')} value={t(order.payment_method)} />
+        <Row
+          label={t('paymentStatus')}
+          value={order.payment_status === 'paid' ? t('paymentPaid') : t('paymentPending')}
+        />
       </View>
+
+      {needsPaymentConfirm && order.payment_claimed_at ? (
+        <Text style={styles.alert}>{t('customerMarkedPaid')}</Text>
+      ) : null}
+
+      {needsPaymentConfirm ? (
+        <Button
+          title={t('confirmPayment')}
+          variant="accent"
+          onPress={onConfirmPayment}
+          loading={confirmingPay}
+        />
+      ) : null}
+
+      <View style={{ height: spacing.md }} />
 
       {order.status === 'pending' && (
         <View style={styles.actions}>
@@ -128,4 +171,20 @@ const styles = StyleSheet.create({
   rowValue: { color: colors.text, fontWeight: '600' },
   bold: { fontWeight: '800', fontSize: 17, color: colors.text },
   actions: { flexDirection: 'row' },
+  alert: {
+    color: colors.warning,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  banner: {
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  success: {},
+  bannerTitle: { fontWeight: '800', fontSize: 17, textAlign: 'center', color: colors.text },
 });

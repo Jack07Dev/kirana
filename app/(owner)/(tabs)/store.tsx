@@ -8,7 +8,7 @@ import { colors, spacing } from '../../../src/constants/theme';
 import { DEFAULT_OPENING_HOURS } from '../../../src/constants/openingHours';
 import { RADIUS_MAX, RADIUS_MIN } from '../../../src/lib/geo';
 import { updateStore } from '../../../src/lib/api';
-import { storePhotoPath, uploadImageFromUri } from '../../../src/lib/storage';
+import { storePhotoPath, storeUpiQrPath, uploadImageFromUri } from '../../../src/lib/storage';
 import { useAuthStore } from '../../../src/stores/authStore';
 import type { OpeningHours } from '../../../src/types/database';
 
@@ -25,6 +25,7 @@ export default function OwnerStoreSettings() {
     store?.opening_hours ?? DEFAULT_OPENING_HOURS
   );
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [upiQrUri, setUpiQrUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function OwnerStoreSettings() {
     if (!store || !user) return;
     setSaving(true);
     let photo_url = store.photo_url ?? undefined;
+    let upi_qr_url = store.upi_qr_url ?? undefined;
     if (photoUri) {
       const { publicUrl, error: upErr } = await uploadImageFromUri(
         photoUri,
@@ -60,17 +62,33 @@ export default function OwnerStoreSettings() {
       if (publicUrl) photo_url = publicUrl;
     }
 
+    if (upiQrUri) {
+      const { publicUrl, error: upErr } = await uploadImageFromUri(
+        upiQrUri,
+        'store-photos',
+        storeUpiQrPath(user.id, store.id)
+      );
+      if (upErr) {
+        setSaving(false);
+        Alert.alert(t('error'), upErr);
+        return;
+      }
+      if (publicUrl) upi_qr_url = publicUrl;
+    }
+
     const { data, error } = await updateStore(store.id, {
       delivery_radius_m: radius,
       upi_id: upi,
       opening_hours: hours,
       ...(photo_url ? { photo_url } : {}),
+      ...(upi_qr_url ? { upi_qr_url } : {}),
     });
     setSaving(false);
     if (error) Alert.alert(t('error'), error.message);
     else if (data) {
       setStore(data);
       setPhotoUri(null);
+      setUpiQrUri(null);
       Alert.alert(t('success'));
     }
   };
@@ -81,6 +99,14 @@ export default function OwnerStoreSettings() {
       quality: 0.7,
     });
     if (!res.canceled) setPhotoUri(res.assets[0].uri);
+  };
+
+  const pickUpiQr = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+    if (!res.canceled) setUpiQrUri(res.assets[0].uri);
   };
 
   return (
@@ -132,6 +158,12 @@ export default function OwnerStoreSettings() {
       <OpeningHoursEditor value={hours} onChange={setHours} />
 
       <Input label={t('upiId')} value={upi} onChangeText={setUpi} autoCapitalize="none" />
+      <Text style={styles.label}>{t('upiQrUpload')}</Text>
+      <Button
+        title={upiQrUri || store.upi_qr_url ? '✓ ' + t('uploadUpiQr') : t('uploadUpiQr')}
+        variant="ghost"
+        onPress={pickUpiQr}
+      />
       <Button title={t('save')} onPress={save} loading={saving} />
 
       <View style={{ height: spacing.xl }} />

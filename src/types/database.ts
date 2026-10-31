@@ -54,6 +54,7 @@ export interface Store {
   delivery_radius_m: number;
   is_online: boolean;
   upi_id: string | null;
+  upi_qr_url: string | null;
   platform_fee: number;
   created_at: string;
   updated_at: string;
@@ -128,6 +129,9 @@ export interface Order {
   accepted_at: string | null;
   out_for_delivery_at: string | null;
   delivered_at: string | null;
+  payment_claimed_at: string | null;
+  payment_reference: string | null;
+  payment_expires_at: string | null;
   created_at: string;
   updated_at: string;
   store?: Store;

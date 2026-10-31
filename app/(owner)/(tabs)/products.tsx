@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { OptimizedList } from '../../../src/components/OptimizedList';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, EmptyState, Input } from '../../../src/components/ui';
@@ -73,8 +74,10 @@ export default function OwnerProducts() {
         <Input placeholder={t('search')} value={q} onChangeText={setQ} />
       </View>
 
-      <FlatList
+      <OptimizedList
+        flex
         data={filtered}
+        estimatedItemSize={88}
         keyExtractor={(p) => p.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<EmptyState title={t('noProducts')} />}

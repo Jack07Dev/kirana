@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,7 +15,7 @@ import { colors, radii, spacing, touch, typography } from '../constants/theme';
 
 type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'accent';
 
-export function Button({
+export const Button = memo(function Button({
   title,
   onPress,
   variant = 'primary',
@@ -66,9 +66,9 @@ export function Button({
       )}
     </Pressable>
   );
-}
+});
 
-export function Input({
+export const Input = memo(function Input({
   label,
   error,
   containerStyle,
@@ -89,7 +89,7 @@ export function Input({
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
-}
+});
 
 export function Screen({
   children,
@@ -101,7 +101,7 @@ export function Screen({
   return <View style={[styles.screen, style]}>{children}</View>;
 }
 
-export function Card({
+export const Card = memo(function Card({
   children,
   style,
   onPress,
@@ -118,9 +118,9 @@ export function Card({
     );
   }
   return <View style={[styles.card, style]}>{children}</View>;
-}
+});
 
-export function SectionTitle({
+export const SectionTitle = memo(function SectionTitle({
   title,
   action,
   onAction,
@@ -139,9 +139,9 @@ export function SectionTitle({
       ) : null}
     </View>
   );
-}
+});
 
-export function Badge({
+export const Badge = memo(function Badge({
   text,
   color = colors.primary,
 }: {
@@ -153,9 +153,9 @@ export function Badge({
       <Text style={[styles.badgeText, { color }]}>{text}</Text>
     </View>
   );
-}
+});
 
-export function EmptyState({
+export const EmptyState = memo(function EmptyState({
   title,
   subtitle,
 }: {
@@ -168,9 +168,9 @@ export function EmptyState({
       {subtitle ? <Text style={styles.emptySub}>{subtitle}</Text> : null}
     </View>
   );
-}
+});
 
-export function StatTile({
+export const StatTile = memo(function StatTile({
   label,
   value,
   accent,
@@ -185,7 +185,7 @@ export function StatTile({
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   screen: {

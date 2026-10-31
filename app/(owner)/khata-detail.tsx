@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { OptimizedList } from '../../src/components/OptimizedList';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../../src/components/ui';
@@ -52,10 +53,12 @@ export default function KhataDetail() {
   const customer = account.customer as { full_name?: string; phone?: string } | undefined;
 
   return (
-    <FlatList
+    <OptimizedList
+      flex
       style={styles.screen}
       contentContainerStyle={styles.content}
       data={ledger}
+      estimatedItemSize={64}
       keyExtractor={(e) => e.id}
       ListHeaderComponent={
         <View>

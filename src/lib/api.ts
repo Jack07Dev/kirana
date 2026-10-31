@@ -62,6 +62,7 @@ export async function updateStore(
     delivery_radius_m: number;
     photo_url: string;
     upi_id: string;
+    upi_qr_url: string;
     opening_hours: OpeningHours;
     is_online: boolean;
     lat: number;
@@ -257,7 +258,7 @@ export async function placeOrder(input: {
       customer_id: input.customer_id,
       address_id: input.address_id,
       payment_method: input.payment_method,
-      payment_status: input.payment_method === 'cod' ? 'pending' : 'pending',
+      payment_status: 'pending',
       subtotal,
       delivery_fee,
       platform_fee,
@@ -269,7 +270,19 @@ export async function placeOrder(input: {
     .select()
     .single();
 
-  if (error || !order) return { data: null, error };
+  if (error || !order) {
+    const msg = error?.message?.toLowerCase() ?? '';
+    if (msg.includes('column') || msg.includes('schema cache')) {
+      return {
+        data: null,
+        error: {
+          ...error!,
+          message: `${error?.message ?? 'Insert failed'}. Run supabase/migrations/004 and 005 in SQL Editor if you added UPI features.`,
+        },
+      };
+    }
+    return { data: null, error };
+  }
 
   const lines = input.items.map((i) => ({
     order_id: order.id,
@@ -294,7 +307,85 @@ export async function placeOrder(input: {
     body: { order_id: order.id, store_id: input.store_id },
   });
 
+  void supabase.functions.invoke('notify-order-event', {
+    body: { event: 'order_placed_customer', order_id: order.id },
+  });
+
   return { data: order as Order, error: null };
+}
+
+export async function claimCustomerUpiPayment(orderId: string, paymentReference?: string) {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      payment_claimed_at: new Date().toISOString(),
+      payment_reference: paymentReference?.trim() || null,
+    })
+    .eq('id', orderId)
+    .select('*, items:order_items(*), store:stores(*)')
+    .single();
+
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('payment_claimed') || msg.includes('column') || msg.includes('policy')) {
+      return {
+        data: null,
+        error: {
+          ...error,
+          message:
+            'Could not save payment. Run SQL migrations 004 and 005 in Supabase (see supabase/migrations/).',
+        },
+      };
+    }
+  }
+
+  if (!error) {
+    void supabase.functions.invoke('notify-order-event', {
+      body: { event: 'payment_claimed', order_id: orderId },
+    });
+  }
+
+  return { data: data as Order | null, error };
+}
+
+export async function confirmOrderPayment(orderId: string) {
+  const { data: existing, error: loadErr } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .single();
+
+  if (loadErr || !existing) return { data: null, error: loadErr };
+
+  if (existing.payment_status === 'paid') {
+    return { data: existing as Order, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('orders')
+    .update({ payment_status: 'paid' })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error || !data) return { data: null, error };
+
+  await supabase.from('payments').insert({
+    order_id: orderId,
+    store_id: data.store_id,
+    customer_id: data.customer_id,
+    amount: data.total,
+    method: data.payment_method,
+    status: 'paid',
+    upi_txn_id: data.payment_reference,
+    note: data.payment_reference ? `UPI ref: ${data.payment_reference}` : 'Confirmed by store',
+  });
+
+  void supabase.functions.invoke('notify-order-event', {
+    body: { event: 'payment_confirmed', order_id: orderId },
+  });
+
+  return { data: data as Order, error: null };
 }
 
 export async function updateOrderStatus(
@@ -302,13 +393,21 @@ export async function updateOrderStatus(
   status: OrderStatus,
   rejection_reason?: string
 ) {
+  const { data: existing } = await supabase
+    .from('orders')
+    .select('payment_method')
+    .eq('id', orderId)
+    .single();
+
   const patch: Record<string, unknown> = { status };
   if (status === 'accepted') patch.accepted_at = new Date().toISOString();
   if (status === 'out_for_delivery')
     patch.out_for_delivery_at = new Date().toISOString();
   if (status === 'delivered') {
     patch.delivered_at = new Date().toISOString();
-    patch.payment_status = 'paid'; // COD settled on delivery for MVP
+    if (existing?.payment_method === 'cod') {
+      patch.payment_status = 'paid';
+    }
   }
   if (status === 'rejected') patch.rejection_reason = rejection_reason ?? null;
 
@@ -360,7 +459,7 @@ export async function ownerDashboard(storeId: string) {
 
   const { data: orders } = await supabase
     .from('orders')
-    .select('id,total,status,created_at')
+    .select('id,total,status,created_at,payment_method,payment_status')
     .eq('store_id', storeId)
     .gte('created_at', start.toISOString());
 
@@ -372,6 +471,14 @@ export async function ownerDashboard(storeId: string) {
   const pending =
     orders?.filter((o) => o.status === 'pending').length ?? 0;
 
+  const pendingUpiVerify =
+    orders?.filter(
+      (o) =>
+        o.payment_method === 'upi' &&
+        o.payment_status === 'pending' &&
+        (o as { payment_claimed_at?: string | null }).payment_claimed_at
+    ).length ?? 0;
+
   const { data: khata } = await supabase
     .from('khata_accounts')
     .select('balance')
@@ -381,7 +488,7 @@ export async function ownerDashboard(storeId: string) {
   const pendingKhata =
     khata?.reduce((s, k) => s + Number(k.balance), 0) ?? 0;
 
-  return { todayOrders, todaySales, pending, pendingKhata };
+  return { todayOrders, todaySales, pending, pendingKhata, pendingUpiVerify };
 }
 
 // ─── Khata ───────────────────────────────────────────────

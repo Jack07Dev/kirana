@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { OptimizedList } from '../../../src/components/OptimizedList';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, EmptyState, Input } from '../../../src/components/ui';
@@ -18,7 +18,7 @@ import {
 } from '../../../src/lib/api';
 import { supabase } from '../../../src/lib/supabase';
 import { useAuthStore } from '../../../src/stores/authStore';
-import { useCartStore } from '../../../src/stores/cartStore';
+import { cartSelectors, useCartStore } from '../../../src/stores/cartStore';
 import type { Product, Store } from '../../../src/types/database';
 
 export default function StoreBrowse() {
@@ -26,7 +26,7 @@ export default function StoreBrowse() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
   const addItem = useCartStore((s) => s.addItem);
-  const itemCount = useCartStore((s) => s.itemCount());
+  const itemCount = useCartStore(cartSelectors.itemCount);
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
@@ -62,8 +62,10 @@ export default function StoreBrowse() {
 
   return (
     <View style={styles.screen}>
-      <FlatList
+      <OptimizedList
+        flex
         data={filtered}
+        estimatedItemSize={88}
         keyExtractor={(p) => p.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={

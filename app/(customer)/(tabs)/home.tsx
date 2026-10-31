@@ -1,7 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, memo } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -12,17 +11,18 @@ import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Badge, Card, EmptyState, textStyles } from '../../../src/components/ui';
+import { OptimizedList } from '../../../src/components/OptimizedList';
 import { colors, spacing } from '../../../src/constants/theme';
 import { formatDistance } from '../../../src/lib/geo';
 import { fetchFavourites, fetchNearbyStores } from '../../../src/lib/api';
 import { useAuthStore } from '../../../src/stores/authStore';
-import { useCartStore } from '../../../src/stores/cartStore';
+import { cartSelectors, useCartStore } from '../../../src/stores/cartStore';
 import type { NearbyStore, Store } from '../../../src/types/database';
 
 export default function CustomerHome() {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const cartCount = useCartStore((s) => s.itemCount());
+  const cartCount = useCartStore(cartSelectors.itemCount);
   const [stores, setStores] = useState<NearbyStore[]>([]);
   const [favs, setFavs] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,8 +79,10 @@ export default function CustomerHome() {
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
-        <FlatList
+        <OptimizedList
+          flex
           data={stores}
+          estimatedItemSize={96}
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
@@ -121,7 +123,7 @@ export default function CustomerHome() {
   );
 }
 
-function StoreCard({
+const StoreCard = memo(function StoreCard({
   store,
   onPress,
   lang,
@@ -155,7 +157,7 @@ function StoreCard({
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },

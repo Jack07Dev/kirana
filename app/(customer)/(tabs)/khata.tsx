@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Linking, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text } from 'react-native';
+import { OptimizedList } from '../../../src/components/OptimizedList';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, EmptyState } from '../../../src/components/ui';
@@ -26,10 +27,12 @@ export default function CustomerKhata() {
   );
 
   return (
-    <FlatList
+    <OptimizedList
+      flex
       style={styles.screen}
       contentContainerStyle={styles.content}
       data={accounts}
+      estimatedItemSize={140}
       keyExtractor={(a) => a.id}
       ListHeaderComponent={<Text style={styles.title}>{t('tabMyKhata')}</Text>}
       ListEmptyComponent={<EmptyState title={t('noKhataAccounts')} />}

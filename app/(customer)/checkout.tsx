@@ -11,6 +11,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Input } from '../../src/components/ui';
+import { UpiPayCard } from '../../src/components/UpiPayCard';
 import { colors, radii, spacing } from '../../src/constants/theme';
 import { formatINR } from '../../src/lib/format';
 import {
@@ -18,9 +19,11 @@ import {
   fetchCustomerKhata,
   placeOrder,
 } from '../../src/lib/api';
+import { buildUpiPayUri } from '../../src/lib/upi';
+import { notifyLocal } from '../../src/lib/notifications';
 import { supabase } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
-import { useCartStore } from '../../src/stores/cartStore';
+import { cartSelectors, useCartStore } from '../../src/stores/cartStore';
 import type { Address, PaymentMethod } from '../../src/types/database';
 
 export default function Checkout() {
@@ -28,7 +31,7 @@ export default function Checkout() {
   const user = useAuthStore((s) => s.user);
   const items = useCartStore((s) => s.items);
   const storeId = useCartStore((s) => s.storeId);
-  const subtotal = useCartStore((s) => s.subtotal());
+  const subtotal = useCartStore(cartSelectors.subtotal);
   const clear = useCartStore((s) => s.clear);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressId, setAddressId] = useState<string | null>(null);
@@ -38,6 +41,7 @@ export default function Checkout() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [upiId, setUpiId] = useState<string | null>(null);
+  const [upiQrUrl, setUpiQrUrl] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,9 +57,18 @@ export default function Checkout() {
           .select('platform_fee,upi_id')
           .eq('id', storeId)
           .single()
-          .then(({ data }) => {
+          .then(({ data, error: storeErr }) => {
+            if (storeErr) return;
             setPlatformFee(Number(data?.platform_fee ?? 0));
             setUpiId(data?.upi_id ?? null);
+          });
+        void supabase
+          .from('stores')
+          .select('upi_qr_url')
+          .eq('id', storeId)
+          .maybeSingle()
+          .then(({ data, error: qrErr }) => {
+            if (!qrErr) setUpiQrUrl(data?.upi_qr_url ?? null);
           });
         void fetchCustomerKhata(user.id).then(({ data }) => {
           const acc = data.find(
@@ -77,11 +90,11 @@ export default function Checkout() {
     setLoading(true);
 
     if (method === 'upi' && upiId) {
-      const upi = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${total}&cu=INR&tn=Kirana%20Order`;
+      const upi = buildUpiPayUri(upiId, total, 'Kirana Order');
       try {
         await Linking.openURL(upi);
       } catch {
-        // continue — store confirms payment manually for MVP
+        // customer can pay via QR on checkout / order screen
       }
     }
 
@@ -107,6 +120,7 @@ export default function Checkout() {
       return;
     }
     clear();
+    void notifyLocal(t('orderPlaced'), data.order_number);
     Alert.alert(t('orderPlaced'), data.order_number);
     router.replace(`/(customer)/order/${data.id}`);
   };
@@ -146,6 +160,16 @@ export default function Checkout() {
           </Pressable>
         )
       )}
+
+      {method === 'upi' && upiId ? (
+        <UpiPayCard
+          upiId={upiId}
+          amount={total}
+          payNote={`Kirana ${storeId?.slice(0, 8) ?? 'order'}`}
+          upiQrUrl={upiQrUrl}
+          compact
+        />
+      ) : null}
 
       <Input label={t('note')} value={notes} onChangeText={setNotes} />
 

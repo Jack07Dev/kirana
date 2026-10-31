@@ -45,6 +45,10 @@ export function storePhotoPath(ownerId: string, storeId: string, fileName = 'cov
   return `${ownerId}/stores/${storeId}/${fileName}`;
 }
 
+export function storeUpiQrPath(ownerId: string, storeId: string) {
+  return `${ownerId}/stores/${storeId}/upi-qr.jpg`;
+}
+
 export function productPhotoPath(
   ownerId: string,
   storeId: string,

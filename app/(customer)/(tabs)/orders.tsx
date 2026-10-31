@@ -1,15 +1,15 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { OptimizedList } from '../../../src/components/OptimizedList';
 import { Badge, Button, Card, EmptyState } from '../../../src/components/ui';
 import { colors, spacing } from '../../../src/constants/theme';
 import { formatINR, ORDER_STATUS_LABELS } from '../../../src/lib/format';
 import { fetchCustomerOrders, fetchStoreProducts } from '../../../src/lib/api';
 import { useAuthStore } from '../../../src/stores/authStore';
-import { useCartStore } from '../../../src/stores/cartStore';
+import { cartSelectors, useCartStore } from '../../../src/stores/cartStore';
 import type { Order } from '../../../src/types/database';
-import { Alert } from 'react-native';
 
 export default function CustomerOrders() {
   const { t, i18n } = useTranslation();
@@ -38,7 +38,7 @@ export default function CustomerOrders() {
         cart.addItem(product, Number(item.quantity));
       }
     }
-    if (cart.itemCount() === 0) {
+    if (cartSelectors.itemCount(cart) === 0) {
       Alert.alert(t('error'), 'Products unavailable');
       return;
     }
@@ -46,10 +46,12 @@ export default function CustomerOrders() {
   };
 
   return (
-    <FlatList
+    <OptimizedList
+      flex
       style={styles.screen}
       contentContainerStyle={styles.content}
       data={orders}
+      estimatedItemSize={130}
       keyExtractor={(o) => o.id}
       ListEmptyComponent={<EmptyState title={t('noOrders')} />}
       renderItem={({ item }) => {

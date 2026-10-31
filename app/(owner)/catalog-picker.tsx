@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { OptimizedList } from '../../src/components/OptimizedList';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Card, Input } from '../../src/components/ui';
@@ -22,8 +23,10 @@ export default function CatalogPicker() {
       <View style={{ padding: spacing.lg, paddingBottom: 0 }}>
         <Input placeholder={t('search')} value={q} onChangeText={setQ} />
       </View>
-      <FlatList
+      <OptimizedList
+        flex
         data={items}
+        estimatedItemSize={72}
         keyExtractor={(i) => i.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {

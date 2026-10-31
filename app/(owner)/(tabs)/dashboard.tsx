@@ -20,6 +20,7 @@ export default function OwnerDashboard() {
     todaySales: 0,
     pending: 0,
     pendingKhata: 0,
+    pendingUpiVerify: 0,
   });
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,6 +55,27 @@ export default function OwnerDashboard() {
         },
         () => {
           void playOrderAlert();
+          void load();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `store_id=eq.${store.id}`,
+        },
+        (payload) => {
+          const next = payload.new as Order;
+          const prev = payload.old as Order;
+          if (
+            next.payment_claimed_at &&
+            !prev.payment_claimed_at &&
+            next.payment_status === 'pending'
+          ) {
+            void playOrderAlert();
+          }
           void load();
         }
       )
@@ -96,6 +118,9 @@ export default function OwnerDashboard() {
       <View style={[styles.stats, { marginTop: spacing.sm }]}>
         <StatTile label={t('pendingOrders')} value={String(stats.pending)} />
         <View style={{ width: spacing.sm }} />
+        <StatTile label={t('pendingUpiVerify')} value={String(stats.pendingUpiVerify)} />
+      </View>
+      <View style={[styles.stats, { marginTop: spacing.sm }]}>
         <StatTile label={t('pendingKhata')} value={formatINR(stats.pendingKhata, true)} />
       </View>
 

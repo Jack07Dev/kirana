@@ -159,6 +159,25 @@ export default {
   cod: 'Cash on Delivery',
   upi: 'UPI',
   khata: 'Khata',
+  payViaUpi: 'Pay via UPI',
+  scanQrOrOpenUpi: 'Scan QR with GPay / PhonePe / Paytm, or open your UPI app.',
+  openUpiApp: 'Open UPI app',
+  paymentStatus: 'Payment status',
+  paymentPending: 'Pending',
+  paymentPaid: 'Paid',
+  iHavePaid: "I've paid",
+  paymentClaimed: 'Waiting for store to confirm payment',
+  confirmPayment: 'Confirm payment received',
+  customerMarkedPaid: 'Customer marked as paid — verify in your UPI app',
+  pendingUpiVerify: 'UPI to verify',
+  upiQrUpload: 'UPI QR image (optional)',
+  uploadUpiQr: 'Upload UPI QR',
+  paymentReference: 'UPI reference (optional)',
+  paymentSuccessBoth: 'Payment successful!',
+  paymentSubmitted: 'Payment submitted',
+  paymentWindowExpired: 'Payment time expired (5 min). Contact the store or place a new order.',
+  paymentWindowLeft: '{{time}} left for store to confirm',
+  payWithin: 'Pay within',
 
   // Khata owner
   khataTitle: 'Digital Khata',
@@ -212,7 +231,6 @@ export default {
 
   // Customer khata
   owedTo: 'You owe',
-  payViaUpi: 'Pay via UPI',
   weekly: 'Weekly',
   monthly: 'Monthly',
 
