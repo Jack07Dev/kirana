@@ -18,7 +18,7 @@ export function mapAuthErrorMessage(message: string): string {
     return 'smsHookFailed';
   }
   if (msg.includes('rate limit') || msg.includes('too many')) {
-    return 'otpRateLimit';
+    return 'authRateLimit';
   }
 
   return message;
@@ -34,5 +34,9 @@ export function resolveAuthErrorKey(t: (k: string) => string, code: string): str
   if (code === 'smsHookFailed') return t('supabaseSmsHookFailed');
   if (code === 'fast2smsWallet') return t('fast2smsWallet');
   if (code === 'otpRateLimit') return t('otpRateLimit');
+  if (code === 'authRateLimit') return t('authRateLimit');
+  if (code === 'devBypassDisabled') return t('devBypassDisabled');
+  if (code === 'devEmailConfirm') return t('devEmailConfirm');
+  if (code === 'devBypassUseDirectLogin') return t('devBypassUseDirectLogin');
   return code;
 }

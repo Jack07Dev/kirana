@@ -1,6 +1,6 @@
 # Kirana — hyperlocal store ordering (MVP)
 
-React Native (Expo SDK 58) + Supabase backend. Connects nearby kirana stores with customers inside the store’s delivery radius. **₹0 delivery fee**, **₹0 commission** (`platform_fee` defaults to 0). Store staff delivers; customers pay product price only (COD / UPI / Khata).
+React Native (Expo SDK 58) + Supabase backend. Connects nearby kirana stores with customers inside the store’s delivery radius. **₹0 delivery fee**, **no commission on product sales**. Platform fee: **₹5 when order subtotal exceeds ₹100** (configurable in `platform_fee_rules`, enforced server-side). Store staff delivers; customers pay product price + platform fee (COD / UPI / Khata).
 
 ## Folder structure
 
@@ -26,7 +26,7 @@ supabase/
 | Table | Purpose |
 |-------|---------|
 | `users` | Profile, role, language, push token |
-| `stores` | Location (PostGIS), radius, hours, online flag, `platform_fee` |
+| `stores` | Location (PostGIS), radius, hours, online flag, `approval_status` |
 | `catalog` | Shared FMCG items (barcode, bilingual names) |
 | `products` | Per-store inventory, MRP, price, stock |
 | `addresses` | Customer delivery locations |
@@ -34,10 +34,10 @@ supabase/
 | `orders` / `order_items` | Orders with snapshots |
 | `khata_accounts` / `khata_ledger` | Store credit (Digital Khata) |
 | `payments` | Khata / order payments |
+| `platform_fee_rules` | Active platform fee threshold & amount |
+| `inventory_movements` | Stock audit log (sale, restock, adjustments) |
 
-`store_type` enum (`kirana`, `sabzi`, `medical`, …) keeps the model extensible.
-
-RPC: `nearby_stores(lat, lng)` — online stores whose radius covers the customer.
+RPC: `nearby_stores`, `preview_order_totals`, `place_order_secure`, `calculate_platform_fee`.
 
 ## UI flow (summary)
 
@@ -58,6 +58,12 @@ RPC: `nearby_stores(lat, lng)` — online stores whose radius covers the custome
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rls_policies.sql`
    - `supabase/migrations/003_storage.sql`
+   - `supabase/migrations/004_phase2_secure_orders.sql`
+   - `supabase/migrations/005_phase2_rls_hardening.sql`
+   - `supabase/migrations/006_phase3_inventory.sql`
+   - `supabase/migrations/007_phase3_inventory_rls.sql`
+   - `supabase/migrations/008_phase5_delivery.sql`
+   - `supabase/migrations/009_phase5_delivery_rls.sql`
 4. Run `supabase/seed/catalog_seed.sql` for FMCG catalog data.
 5. Deploy Edge Functions (push when app is in background):
 

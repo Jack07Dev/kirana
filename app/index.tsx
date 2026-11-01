@@ -14,5 +14,9 @@ export default function Index() {
     return <Redirect href="/(owner)/(tabs)/dashboard" />;
   }
 
+  if (user.role === 'delivery_partner') {
+    return <Redirect href="/(delivery)/(tabs)/orders" />;
+  }
+
   return <Redirect href="/(customer)/(tabs)/home" />;
 }

@@ -1,15 +1,21 @@
 import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
 import { router } from 'expo-router';
-import { requestPhoneOtp, verifyPhoneOtp } from '../lib/phoneAuth';
+import { requestPhoneOtp, verifyPhoneOtp, devDirectLogin } from '../lib/phoneAuth';
+import { isDevBypassEnabled } from '../lib/devAuth';
+import { toE164India } from '../lib/format';
+import {
+  linkDeliveryPartnerUser,
+} from '../lib/api';
 import { supabase } from '../lib/supabase';
-import type { Store, User, UserRole } from '../types/database';
+import type { Store, User, UserRole, DeliveryPartner } from '../types/database';
 import i18n from '../i18n';
 
 interface AuthState {
   session: Session | null;
   user: User | null;
   store: Store | null;
+  deliveryPartner: DeliveryPartner | null;
   loading: boolean;
   otpSent: boolean;
   phone: string;
@@ -17,6 +23,8 @@ interface AuthState {
 
   init: () => Promise<void>;
   sendOtp: (phone: string) => Promise<{ error?: string }>;
+  stagePhone: (phone: string) => { error?: string };
+  devLogin: (phone: string) => Promise<{ error?: string }>;
   verifyOtp: (otp: string) => Promise<{ error?: string }>;
   setRole: (role: UserRole, fullName: string) => Promise<{ error?: string }>;
   refreshProfile: () => Promise<void>;
@@ -29,6 +37,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   store: null,
+  deliveryPartner: null,
   loading: false,
   otpSent: false,
   phone: '',
@@ -42,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     supabase.auth.onAuthStateChange(async (_event, session) => {
       set({ session });
       if (session) await get().refreshProfile();
-      else set({ user: null, store: null });
+      else set({ user: null, store: null, deliveryPartner: null });
     });
   },
 
@@ -55,11 +64,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return {};
   },
 
+  stagePhone: (phone) => {
+    const digits = phone.replace(/\D/g, '').slice(-10);
+    if (digits.length !== 10) return { error: 'required' };
+    set({ phone: toE164India(digits), otpSent: true });
+    return {};
+  },
+
+  devLogin: async (phone) => {
+    set({ loading: true });
+    const res = await devDirectLogin(phone);
+    set({ loading: false });
+    if (res.error) return { error: res.error };
+    if (res.e164) set({ phone: res.e164, otpSent: false });
+    const { data } = await supabase.auth.getSession();
+    set({ session: data.session });
+    await get().refreshProfile();
+    return {};
+  },
+
   verifyOtp: async (otp) => {
     const { phone } = get();
     if (!phone) return { error: 'required' };
 
+    const token = otp.replace(/\D/g, '');
+    if (token.length < 6) return { error: 'required' };
+
     set({ loading: true });
+
+    if (isDevBypassEnabled()) {
+      const digits = phone.replace(/\D/g, '').slice(-10);
+      const res = await devDirectLogin(digits);
+      set({ loading: false });
+      if (res.error) return { error: res.error };
+      if (res.e164) set({ phone: res.e164 });
+      const { data } = await supabase.auth.getSession();
+      set({ session: data.session });
+      await get().refreshProfile();
+      return {};
+    }
+
     const result = await verifyPhoneOtp(phone, otp);
     if (result.error) {
       set({ loading: false });
@@ -114,7 +158,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .select('*')
         .eq('owner_id', uid)
         .maybeSingle();
-      set({ store: (store as Store) ?? null });
+      set({ store: (store as Store) ?? null, deliveryPartner: null });
+    } else if (user?.role === 'delivery_partner') {
+      set({ store: null });
+      await linkDeliveryPartnerUser();
+      const { data: partner } = await supabase
+        .from('delivery_partners')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('is_active', true)
+        .maybeSingle();
+      set({ deliveryPartner: (partner as DeliveryPartner) ?? null });
+    } else {
+      set({ store: null, deliveryPartner: null });
     }
   },
 
@@ -137,6 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       session: null,
       user: null,
       store: null,
+      deliveryPartner: null,
       otpSent: false,
       phone: '',
     });

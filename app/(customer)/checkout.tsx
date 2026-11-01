@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -17,8 +17,13 @@ import {
   fetchAddresses,
   fetchCustomerKhata,
   placeOrder,
+  previewOrderTotals,
 } from '../../src/lib/api';
 import { supabase } from '../../src/lib/supabase';
+import {
+  parseCheckoutPreview,
+  resolveOrderError,
+} from '../../src/lib/orderErrors';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useCartStore } from '../../src/stores/cartStore';
 import type { Address, PaymentMethod } from '../../src/types/database';
@@ -28,16 +33,59 @@ export default function Checkout() {
   const user = useAuthStore((s) => s.user);
   const items = useCartStore((s) => s.items);
   const storeId = useCartStore((s) => s.storeId);
-  const subtotal = useCartStore((s) => s.subtotal());
   const clear = useCartStore((s) => s.clear);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressId, setAddressId] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('cod');
   const [khataOk, setKhataOk] = useState(false);
+  const [subtotal, setSubtotal] = useState(0);
   const [platformFee, setPlatformFee] = useState(0);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [previewOk, setPreviewOk] = useState(false);
+  const [previewError, setPreviewError] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [upiId, setUpiId] = useState<string | null>(null);
+
+  const lineItems = useMemo(
+    () => items.map((i) => ({ product_id: i.product.id, quantity: i.quantity })),
+    [items]
+  );
+
+  const refreshPreview = useCallback(async () => {
+    if (!storeId || !addressId || !lineItems.length) {
+      setPreviewOk(false);
+      setPreviewError('');
+      setSubtotal(0);
+      setPlatformFee(0);
+      setDeliveryFee(0);
+      return;
+    }
+    const { data, error } = await previewOrderTotals({
+      store_id: storeId,
+      address_id: addressId,
+      items: lineItems,
+    });
+    if (error) {
+      setPreviewOk(false);
+      setPreviewError(resolveOrderError(t, error.message));
+      return;
+    }
+    const preview = parseCheckoutPreview(data);
+    if (!preview.ok) {
+      setPreviewOk(false);
+      setPreviewError(resolveOrderError(t, preview.error));
+      setSubtotal(preview.subtotal ?? 0);
+      setPlatformFee(preview.platform_fee ?? 0);
+      setDeliveryFee(preview.delivery_fee ?? 0);
+      return;
+    }
+    setPreviewOk(true);
+    setPreviewError('');
+    setSubtotal(preview.subtotal ?? 0);
+    setPlatformFee(preview.platform_fee ?? 0);
+    setDeliveryFee(preview.delivery_fee ?? 0);
+  }, [storeId, addressId, lineItems, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,28 +98,37 @@ export default function Checkout() {
       if (storeId) {
         void supabase
           .from('stores')
-          .select('platform_fee,upi_id')
+          .select('upi_id')
           .eq('id', storeId)
           .single()
           .then(({ data }) => {
-            setPlatformFee(Number(data?.platform_fee ?? 0));
             setUpiId(data?.upi_id ?? null);
           });
         void fetchCustomerKhata(user.id).then(({ data }) => {
           const acc = data.find(
             (a) => a.store_id === storeId && a.is_enabled
           );
-          setKhataOk(!!acc && Number(acc.balance) < Number(acc.credit_limit));
+          setKhataOk(!!acc);
         });
       }
     }, [user, storeId])
   );
 
-  const total = subtotal + platformFee; // delivery always 0
+  useFocusEffect(
+    useCallback(() => {
+      void refreshPreview();
+    }, [refreshPreview])
+  );
+
+  const total = subtotal + platformFee + deliveryFee;
 
   const onPlace = async () => {
     if (!user || !storeId || !addressId || !items.length) {
       Alert.alert(t('required'));
+      return;
+    }
+    if (!previewOk) {
+      Alert.alert(t('error'), previewError || t('checkoutPreviewFailed'));
       return;
     }
     setLoading(true);
@@ -81,29 +138,20 @@ export default function Checkout() {
       try {
         await Linking.openURL(upi);
       } catch {
-        // continue — store confirms payment manually for MVP
+        // Store confirms UPI manually until payment gateway is integrated.
       }
     }
 
     const { data, error } = await placeOrder({
       store_id: storeId,
-      customer_id: user.id,
       address_id: addressId,
       payment_method: method,
-      platform_fee: platformFee,
       notes: notes || undefined,
-      items: items.map((i) => ({
-        product_id: i.product.id,
-        product_name: i.product.name,
-        unit: i.product.unit,
-        quantity: i.quantity,
-        mrp: i.product.mrp,
-        selling_price: i.product.selling_price,
-      })),
+      items: lineItems,
     });
     setLoading(false);
     if (error || !data) {
-      Alert.alert(t('error'), error?.message);
+      Alert.alert(t('error'), resolveOrderError(t, error?.message));
       return;
     }
     clear();
@@ -136,6 +184,10 @@ export default function Checkout() {
         onPress={() => router.push('/(customer)/address-form')}
       />
 
+      {previewError ? (
+        <Text style={styles.previewError}>{previewError}</Text>
+      ) : null}
+
       <Text style={styles.section}>{t('paymentMethod')}</Text>
       {(['cod', 'upi', ...(khataOk ? (['khata'] as const) : [])] as PaymentMethod[]).map(
         (m) => (
@@ -150,13 +202,21 @@ export default function Checkout() {
       <Input label={t('note')} value={notes} onChangeText={setNotes} />
 
       <View style={styles.totals}>
-        <Row label={t('total')} value={formatINR(subtotal)} />
-        <Row label={t('deliveryFee')} value={t('free')} />
+        <Row label={t('subtotal')} value={formatINR(subtotal)} />
+        <Row
+          label={t('deliveryFee')}
+          value={deliveryFee > 0 ? formatINR(deliveryFee) : t('free')}
+        />
         <Row label={t('platformFee')} value={formatINR(platformFee)} />
         <Row label={t('total')} value={formatINR(total)} bold />
       </View>
 
-      <Button title={t('placeOrder')} onPress={onPlace} loading={loading} />
+      <Button
+        title={t('placeOrder')}
+        onPress={onPlace}
+        loading={loading}
+        disabled={!previewOk}
+      />
     </ScrollView>
   );
 }
@@ -186,6 +246,7 @@ const styles = StyleSheet.create({
   selected: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primarySoft },
   addrTitle: { fontWeight: '700', marginBottom: 4, color: colors.primary },
   pay: { fontWeight: '700', fontSize: 16 },
+  previewError: { color: colors.danger, marginBottom: spacing.sm, fontWeight: '600' },
   totals: {
     backgroundColor: colors.surface,
     padding: spacing.md,

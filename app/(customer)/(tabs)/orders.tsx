@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, EmptyState } from '../../../src/components/ui';
@@ -9,7 +9,6 @@ import { fetchCustomerOrders, fetchStoreProducts } from '../../../src/lib/api';
 import { useAuthStore } from '../../../src/stores/authStore';
 import { useCartStore } from '../../../src/stores/cartStore';
 import type { Order } from '../../../src/types/database';
-import { Alert } from 'react-native';
 
 export default function CustomerOrders() {
   const { t, i18n } = useTranslation();

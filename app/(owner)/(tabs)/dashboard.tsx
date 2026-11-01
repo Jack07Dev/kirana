@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, SectionTitle, StatTile } from '../../../src/components/ui';
 import { colors, spacing } from '../../../src/constants/theme';
 import { formatINR } from '../../../src/lib/format';
-import { fetchStoreOrders, ownerDashboard, updateOrderStatus } from '../../../src/lib/api';
+import { fetchStoreOrders, fetchLowStockProducts, ownerDashboard, updateOrderStatus } from '../../../src/lib/api';
 import { playOrderAlert, registerForPushNotifications } from '../../../src/lib/notifications';
 import { supabase } from '../../../src/lib/supabase';
 import { useAuthStore } from '../../../src/stores/authStore';
@@ -20,8 +20,10 @@ export default function OwnerDashboard() {
     todaySales: 0,
     pending: 0,
     pendingKhata: 0,
+    lowStockCount: 0,
   });
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [lowStock, setLowStock] = useState<{ id: string; name: string; stock_qty: number | null; stock_status: string }[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -30,6 +32,15 @@ export default function OwnerDashboard() {
     setStats(d);
     const { data } = await fetchStoreOrders(store.id);
     setPendingOrders((data ?? []).filter((o) => o.status === 'pending'));
+    const { data: low } = await fetchLowStockProducts(store.id);
+    setLowStock(
+      (low ?? []).slice(0, 5).map((p) => ({
+        id: p.id,
+        name: p.name,
+        stock_qty: p.stock_qty,
+        stock_status: p.stock_status,
+      }))
+    );
   }, [store]);
 
   useFocusEffect(
@@ -96,8 +107,31 @@ export default function OwnerDashboard() {
       <View style={[styles.stats, { marginTop: spacing.sm }]}>
         <StatTile label={t('pendingOrders')} value={String(stats.pending)} />
         <View style={{ width: spacing.sm }} />
+        <StatTile label={t('lowStockAlert')} value={String(stats.lowStockCount)} />
+      </View>
+      <View style={[styles.stats, { marginTop: spacing.sm }]}>
         <StatTile label={t('pendingKhata')} value={formatINR(stats.pendingKhata, true)} />
       </View>
+
+      {lowStock.length > 0 ? (
+        <>
+          <SectionTitle title={t('lowStockProducts')} />
+          {lowStock.map((p) => (
+            <Card
+              key={p.id}
+              style={styles.orderCard}
+              onPress={() => router.push(`/(owner)/product-form?id=${p.id}`)}
+            >
+              <Text style={styles.orderNo}>{p.name}</Text>
+              <Text style={styles.meta}>
+                {p.stock_qty != null
+                  ? t('stockQtyLabel', { qty: p.stock_qty })
+                  : t(p.stock_status === 'out_of_stock' ? 'outOfStock' : 'lowStock')}
+              </Text>
+            </Card>
+          ))}
+        </>
+      ) : null}
 
       <SectionTitle
         title={t('pendingOrders')}

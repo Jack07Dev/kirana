@@ -7,12 +7,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Badge, Card, EmptyState, textStyles } from '../../../src/components/ui';
+import { Badge, Button, Card, EmptyState, textStyles } from '../../../src/components/ui';
+import { StoresMap } from '../../../src/components/StoresMap';
 import { colors, spacing } from '../../../src/constants/theme';
+import { resolveCustomerLocation, refreshGpsLocation } from '../../../src/lib/customerLocation';
 import { formatDistance } from '../../../src/lib/geo';
 import { fetchFavourites, fetchNearbyStores } from '../../../src/lib/api';
 import { useAuthStore } from '../../../src/stores/authStore';
@@ -26,33 +27,35 @@ export default function CustomerHome() {
   const [stores, setStores] = useState<NearbyStore[]>([]);
   const [favs, setFavs] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const lang = i18n.language === 'hi' ? 'hi' : 'en';
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
+    setErrorKey(null);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Location permission needed');
+      const loc = await resolveCustomerLocation(user?.id);
+      if (!loc.data) {
+        setErrorKey(loc.error === 'no_location' ? 'locationSetupNeeded' : 'locationDenied');
+        setStores([]);
+        setCoords(null);
         setLoading(false);
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const nearby = await fetchNearbyStores(
-        pos.coords.latitude,
-        pos.coords.longitude
-      );
+
+      setCoords({ lat: loc.data.lat, lng: loc.data.lng });
+      setLocationLabel(loc.data.label ?? loc.data.source);
+
+      const nearby = await fetchNearbyStores(loc.data.lat, loc.data.lng);
       setStores(nearby);
       if (user) {
         const f = await fetchFavourites(user.id);
         setFavs(f);
       }
     } catch (e) {
-      setError(String(e));
+      setErrorKey(String(e));
     }
     setLoading(false);
   }, [user]);
@@ -62,6 +65,21 @@ export default function CustomerHome() {
       void load();
     }, [load])
   );
+
+  const onRefreshGps = async () => {
+    setLoading(true);
+    const gps = await refreshGpsLocation();
+    if (!gps) {
+      setErrorKey('locationDenied');
+      setLoading(false);
+      return;
+    }
+    setCoords({ lat: gps.lat, lng: gps.lng });
+    setLocationLabel('GPS');
+    const nearby = await fetchNearbyStores(gps.lat, gps.lng);
+    setStores(nearby);
+    setLoading(false);
+  };
 
   return (
     <View style={styles.screen}>
@@ -76,8 +94,25 @@ export default function CustomerHome() {
         ) : null}
       </View>
 
+      {locationLabel ? (
+        <Text style={styles.locHint}>
+          {t('deliveringNear')}: {locationLabel}
+        </Text>
+      ) : null}
+
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+      ) : errorKey ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.error}>{t(errorKey)}</Text>
+          <Button title={t('useCurrentLocation')} onPress={onRefreshGps} style={{ marginTop: 12 }} />
+          <View style={{ height: 8 }} />
+          <Button
+            title={t('addAddress')}
+            variant="secondary"
+            onPress={() => router.push('/(customer)/address-form')}
+          />
+        </View>
       ) : (
         <FlatList
           data={stores}
@@ -85,7 +120,17 @@ export default function CustomerHome() {
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <>
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+              {coords ? (
+                <StoresMap
+                  customerLat={coords.lat}
+                  customerLng={coords.lng}
+                  stores={stores}
+                  onStorePress={(id) => router.push(`/(customer)/store/${id}`)}
+                />
+              ) : null}
+              <View style={styles.locActions}>
+                <Button title={t('refreshLocation')} variant="ghost" large={false} onPress={onRefreshGps} />
+              </View>
               {favs.length > 0 ? (
                 <>
                   <Text style={styles.section}>{t('favourites')}</Text>
@@ -166,6 +211,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  locHint: {
+    paddingHorizontal: spacing.lg,
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+  },
   cartBtn: {
     backgroundColor: colors.accent,
     paddingHorizontal: 14,
@@ -174,6 +225,8 @@ const styles = StyleSheet.create({
   },
   cartText: { color: colors.white, fontWeight: '800' },
   list: { padding: spacing.lg, flexGrow: 1 },
+  locActions: { marginBottom: spacing.sm },
+  emptyWrap: { padding: spacing.lg, flex: 1 },
   section: {
     fontSize: 18,
     fontWeight: '700',
@@ -186,5 +239,5 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: '800', color: colors.text },
   addr: { color: colors.textSecondary, marginTop: 4 },
   dist: { color: colors.primary, fontWeight: '600', marginTop: 4, fontSize: 13 },
-  error: { color: colors.danger, marginBottom: spacing.md },
+  error: { color: colors.danger, marginBottom: spacing.md, lineHeight: 22 },
 });

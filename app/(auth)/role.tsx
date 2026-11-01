@@ -46,6 +46,12 @@ export default function RoleScreen() {
             desc={t('customerDesc')}
             onPress={() => setLocalRole('customer')}
           />
+          <RoleCard
+            selected={role === 'delivery_partner'}
+            title={t('iamDeliveryPartner')}
+            desc={t('deliveryPartnerDesc')}
+            onPress={() => setLocalRole('delivery_partner')}
+          />
         </View>
         <Input
           label={t('yourName')}

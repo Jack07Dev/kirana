@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
 import { supabase } from '../../src/lib/supabase';
-import { upsertProduct } from '../../src/lib/api';
+import { upsertProduct, setProductStockQty, adjustProductStock, setProductReorderThreshold } from '../../src/lib/api';
 import { productPhotoPath, uploadImageFromUri } from '../../src/lib/storage';
 import { useAuthStore } from '../../src/stores/authStore';
 
@@ -30,6 +30,9 @@ export default function ProductForm() {
   const [category, setCategory] = useState('other');
   const [code, setCode] = useState(barcode ?? '');
   const [discount, setDiscount] = useState('0');
+  const [stockQty, setStockQty] = useState('');
+  const [reorderAt, setReorderAt] = useState('5');
+  const [adjustDelta, setAdjustDelta] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +52,8 @@ export default function ProductForm() {
         setCategory(data.category ?? 'other');
         setCode(data.barcode ?? '');
         setDiscount(String(data.discount_pct ?? 0));
+        if (data.stock_qty != null) setStockQty(String(data.stock_qty));
+        setReorderAt(String(data.reorder_threshold ?? 5));
         if (data.photo_url) setPhotoUri(data.photo_url);
       });
   }, [id]);
@@ -83,7 +88,7 @@ export default function ProductForm() {
       unit,
       category,
       barcode: code || null,
-      stock_status: 'in_stock',
+      ...(id ? {} : { stock_status: 'in_stock' as const }),
       is_active: true,
     });
 
@@ -102,6 +107,29 @@ export default function ProductForm() {
       if (upErr) Alert.alert(t('error'), upErr);
       else if (publicUrl) {
         await supabase.from('products').update({ photo_url: publicUrl }).eq('id', saved.id);
+      }
+    }
+
+    const qtyTrim = stockQty.trim();
+    if (qtyTrim !== '') {
+      const q = parseInt(qtyTrim, 10);
+      if (!Number.isNaN(q) && q >= 0) {
+        const { error: stockErr } = await setProductStockQty(saved.id, q, t('stockCountSave'));
+        if (stockErr) Alert.alert(t('error'), stockErr.message);
+      }
+    }
+
+    const thresh = parseInt(reorderAt, 10);
+    if (!Number.isNaN(thresh) && thresh >= 0) {
+      await setProductReorderThreshold(saved.id, thresh);
+    }
+
+    const deltaTrim = adjustDelta.trim();
+    if (id && deltaTrim !== '') {
+      const d = parseFloat(deltaTrim);
+      if (!Number.isNaN(d) && d !== 0) {
+        const { error: adjErr } = await adjustProductStock(saved.id, d, t('stockAdjustNote'));
+        if (adjErr) Alert.alert(t('error'), adjErr.message);
       }
     }
 
@@ -128,6 +156,35 @@ export default function ProductForm() {
       <Input label={t('unit')} value={unit} onChangeText={setUnit} />
       <Input label={t('category')} value={category} onChangeText={setCategory} />
       <Input label="Barcode" value={code} onChangeText={setCode} />
+      <Input
+        label={t('stockQty')}
+        value={stockQty}
+        onChangeText={setStockQty}
+        keyboardType="number-pad"
+        placeholder={t('stockQtyHint')}
+      />
+      <Input
+        label={t('reorderThreshold')}
+        value={reorderAt}
+        onChangeText={setReorderAt}
+        keyboardType="number-pad"
+      />
+      {id ? (
+        <Input
+          label={t('stockAdjustDelta')}
+          value={adjustDelta}
+          onChangeText={setAdjustDelta}
+          keyboardType="numbers-and-punctuation"
+          placeholder={t('stockAdjustHint')}
+        />
+      ) : null}
+      {id ? (
+        <Button
+          title={t('stockHistory')}
+          variant="ghost"
+          onPress={() => router.push(`/(owner)/stock-history?id=${id}`)}
+        />
+      ) : null}
       <Button
         title={photoUri ? '✓ ' + t('productPhoto') : t('productPhoto')}
         variant="ghost"

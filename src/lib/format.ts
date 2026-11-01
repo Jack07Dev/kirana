@@ -32,6 +32,8 @@ export const ORDER_STATUS_LABELS: Record<
 > = {
   pending: { en: 'Pending', hi: 'लंबित', color: '#D97706' },
   accepted: { en: 'Accepted', hi: 'स्वीकृत', color: '#0B6E4F' },
+  preparing: { en: 'Preparing', hi: 'तैयार हो रहा', color: '#0B6E4F' },
+  packed: { en: 'Packed', hi: 'पैक हो गया', color: '#059669' },
   rejected: { en: 'Rejected', hi: 'अस्वीकृत', color: '#C0392B' },
   out_for_delivery: { en: 'Out for delivery', hi: 'डिलीवरी पर', color: '#2563EB' },
   delivered: { en: 'Delivered', hi: 'डिलीवर', color: '#1B9C6E' },

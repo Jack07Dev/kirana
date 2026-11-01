@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -14,6 +14,14 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/** True when running inside the Expo Go app (no remote push tokens). */
+export function isExpoGo(): boolean {
+  return (
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    Constants.appOwnership === 'expo'
+  );
+}
+
 /** EAS project UUID — required for Expo push tokens (not available in Expo Go). */
 function getExpoProjectId(): string | undefined {
   const fromConfig =
@@ -25,13 +33,16 @@ function getExpoProjectId(): string | undefined {
 
 function canRegisterRemotePush(): boolean {
   if (!Device.isDevice) return false;
-  // Remote push / Expo push tokens are not supported in Expo Go (SDK 53+).
-  if (Constants.appOwnership === 'expo') return false;
-  return Boolean(getExpoProjectId());
+  if (isExpoGo()) return false;
+  const projectId = getExpoProjectId();
+  if (!projectId) return false;
+  return true;
 }
 
 export async function registerForPushNotifications(userId: string) {
-  if (!canRegisterRemotePush()) return null;
+  if (!canRegisterRemotePush()) {
+    return null;
+  }
 
   try {
     const { status: existing } = await Notifications.getPermissionsAsync();
@@ -88,8 +99,19 @@ export async function playOrderAlert() {
 }
 
 export async function notifyLocal(title: string, body: string) {
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body, sound: true },
-    trigger: null,
-  });
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const req = await Notifications.requestPermissionsAsync();
+      if (req.status !== 'granted') return;
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: null,
+    });
+  } catch (e) {
+    if (__DEV__) {
+      console.warn('[Kirana] Local notification skipped:', e instanceof Error ? e.message : e);
+    }
+  }
 }

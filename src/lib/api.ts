@@ -1,8 +1,12 @@
 import { supabase, geoPoint } from './supabase';
 import { parseLocation } from './geo';
+import { attachStoreCoordinates } from './storeCoords';
 import type {
   Address,
   CatalogItem,
+  DeliveryAssignment,
+  DeliveryPartner,
+  InventoryMovement,
   KhataAccount,
   KhataLedgerEntry,
   NearbyStore,
@@ -109,7 +113,8 @@ export async function fetchNearbyStores(
       })
       .filter(Boolean) as NearbyStore[];
   }
-  return (data ?? []) as NearbyStore[];
+  const list = (data ?? []) as NearbyStore[];
+  return attachStoreCoordinates(list);
 }
 
 // ─── Products ────────────────────────────────────────────
@@ -149,7 +154,69 @@ export async function upsertProduct(
 }
 
 export async function setStockStatus(productId: string, status: StockStatus) {
-  return supabase.from('products').update({ stock_status: status }).eq('id', productId);
+  const { data, error } = await supabase.rpc('owner_set_stock_status', {
+    p_product_id: productId,
+    p_status: status,
+    p_note: null,
+  });
+  return { data: data as Product | null, error };
+}
+
+export async function adjustProductStock(
+  productId: string,
+  delta: number,
+  note?: string
+) {
+  const { data, error } = await supabase.rpc('owner_adjust_stock', {
+    p_product_id: productId,
+    p_delta: delta,
+    p_note: note ?? null,
+  });
+  return { data: data as Product | null, error };
+}
+
+export async function setProductStockQty(
+  productId: string,
+  newQty: number,
+  note?: string
+) {
+  const { data, error } = await supabase.rpc('owner_set_stock_qty', {
+    p_product_id: productId,
+    p_new_qty: newQty,
+    p_note: note ?? null,
+  });
+  return { data: data as Product | null, error };
+}
+
+export async function setProductReorderThreshold(productId: string, threshold: number) {
+  const { data, error } = await supabase.rpc('owner_set_reorder_threshold', {
+    p_product_id: productId,
+    p_threshold: threshold,
+  });
+  return { data: data as Product | null, error };
+}
+
+export async function fetchInventoryMovements(productId: string, limit = 50) {
+  const { data, error } = await supabase
+    .from('inventory_movements')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return { data: (data ?? []) as InventoryMovement[], error };
+}
+
+export async function fetchLowStockProducts(storeId: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('is_active', true)
+    .in('stock_status', ['low_stock', 'out_of_stock'])
+    .order('stock_status', { ascending: true })
+    .order('name')
+    .limit(20);
+  return { data: (data ?? []) as Product[], error };
 }
 
 export async function bulkInsertProducts(
@@ -226,75 +293,47 @@ export async function createAddress(input: {
 
 // ─── Orders ──────────────────────────────────────────────
 
+export async function previewOrderTotals(input: {
+  store_id: string;
+  address_id: string;
+  items: Array<{ product_id: string; quantity: number }>;
+}) {
+  const { data, error } = await supabase.rpc('preview_order_totals', {
+    p_store_id: input.store_id,
+    p_address_id: input.address_id,
+    p_items: input.items,
+  });
+  return { data, error };
+}
+
+/** Server-validated checkout — prices, fees, stock, serviceability, khata. */
 export async function placeOrder(input: {
   store_id: string;
-  customer_id: string;
   address_id: string;
   payment_method: PaymentMethod;
-  platform_fee: number;
   notes?: string;
   items: Array<{
     product_id: string;
-    product_name: string;
-    unit: string;
     quantity: number;
-    mrp: number;
-    selling_price: number;
   }>;
 }) {
-  const subtotal = input.items.reduce(
-    (s, i) => s + i.selling_price * i.quantity,
-    0
-  );
-  const delivery_fee = 0;
-  const platform_fee = input.platform_fee ?? 0;
-  const total = subtotal + delivery_fee + platform_fee;
-
-  const { data: order, error } = await supabase
-    .from('orders')
-    .insert({
-      store_id: input.store_id,
-      customer_id: input.customer_id,
-      address_id: input.address_id,
-      payment_method: input.payment_method,
-      payment_status: input.payment_method === 'cod' ? 'pending' : 'pending',
-      subtotal,
-      delivery_fee,
-      platform_fee,
-      discount_total: 0,
-      total,
-      notes: input.notes ?? null,
-      order_number: '', // trigger fills
-    })
-    .select()
-    .single();
+  const { data: order, error } = await supabase.rpc('place_order_secure', {
+    p_store_id: input.store_id,
+    p_address_id: input.address_id,
+    p_payment_method: input.payment_method,
+    p_notes: input.notes ?? null,
+    p_items: input.items,
+  });
 
   if (error || !order) return { data: null, error };
 
-  const lines = input.items.map((i) => ({
-    order_id: order.id,
-    product_id: i.product_id,
-    product_name: i.product_name,
-    unit: i.unit,
-    quantity: i.quantity,
-    mrp: i.mrp,
-    selling_price: i.selling_price,
-    line_total: i.selling_price * i.quantity,
-  }));
-
-  const { error: itemsError } = await supabase.from('order_items').insert(lines);
-  if (itemsError) return { data: null, error: itemsError };
-
-  // Khata debit
-  if (input.payment_method === 'khata') {
-    await debitKhata(input.store_id, input.customer_id, total, order.id);
-  }
+  const placed = order as Order;
 
   void supabase.functions.invoke('notify-order', {
-    body: { order_id: order.id, store_id: input.store_id },
+    body: { order_id: placed.id, store_id: input.store_id },
   });
 
-  return { data: order as Order, error: null };
+  return { data: placed, error: null };
 }
 
 export async function updateOrderStatus(
@@ -302,13 +341,28 @@ export async function updateOrderStatus(
   status: OrderStatus,
   rejection_reason?: string
 ) {
+  const { data, error } = await supabase.rpc('owner_update_order_status', {
+    p_order_id: orderId,
+    p_status: status,
+    p_rejection_reason: rejection_reason ?? null,
+  });
+
+  if (!error && data) {
+    if (status !== 'pending') {
+      void supabase.functions.invoke('notify-order-status', {
+        body: { order_id: orderId, status },
+      });
+    }
+    return { data: data as Order, error: null };
+  }
+
   const patch: Record<string, unknown> = { status };
   if (status === 'accepted') patch.accepted_at = new Date().toISOString();
   if (status === 'out_for_delivery')
     patch.out_for_delivery_at = new Date().toISOString();
   if (status === 'delivered') {
     patch.delivered_at = new Date().toISOString();
-    patch.payment_status = 'paid'; // COD settled on delivery for MVP
+    patch.payment_status = 'paid';
   }
   if (status === 'rejected') patch.rejection_reason = rejection_reason ?? null;
 
@@ -321,6 +375,78 @@ export async function updateOrderStatus(
   }
 
   return result;
+}
+
+export async function assignOrderDelivery(orderId: string, partnerId: string) {
+  const { data, error } = await supabase.rpc('assign_order_delivery', {
+    p_order_id: orderId,
+    p_partner_id: partnerId,
+  });
+  if (!error) {
+    void supabase.functions.invoke('notify-order-status', {
+      body: { order_id: orderId, status: 'out_for_delivery' },
+    });
+  }
+  return { data, error };
+}
+
+export async function registerDeliveryPartner(phone: string, displayName: string) {
+  const { data, error } = await supabase.rpc('owner_register_delivery_partner', {
+    p_phone: phone,
+    p_display_name: displayName,
+  });
+  return { data: data as DeliveryPartner | null, error };
+}
+
+export async function fetchDeliveryPartners(storeId: string) {
+  const { data, error } = await supabase
+    .from('delivery_partners')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('is_active', true)
+    .order('display_name');
+  return { data: (data ?? []) as DeliveryPartner[], error };
+}
+
+export async function linkDeliveryPartnerUser() {
+  return supabase.rpc('link_delivery_partner_user');
+}
+
+export async function fetchPartnerAssignments() {
+  const { data, error } = await supabase
+    .from('delivery_assignments')
+    .select(
+      '*, order:orders(*, items:order_items(*), address:addresses(*), store:stores(name, address_line))'
+    )
+    .order('assigned_at', { ascending: false })
+    .limit(50);
+  return { data: data ?? [], error };
+}
+
+export async function partnerMarkPickedUp(orderId: string) {
+  return supabase.rpc('partner_mark_picked_up', { p_order_id: orderId });
+}
+
+export async function partnerVerifyDelivery(orderId: string, otp: string) {
+  const { data, error } = await supabase.rpc('partner_verify_delivery', {
+    p_order_id: orderId,
+    p_otp: otp.replace(/\D/g, ''),
+  });
+  if (!error) {
+    void supabase.functions.invoke('notify-order-status', {
+      body: { order_id: orderId, status: 'delivered' },
+    });
+  }
+  return { data: data as Order | null, error };
+}
+
+export async function fetchOrderStatusHistory(orderId: string) {
+  const { data, error } = await supabase
+    .from('order_status_history')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+  return { data: data ?? [], error };
 }
 
 export async function fetchStoreOrders(storeId: string) {
@@ -343,15 +469,36 @@ export async function fetchCustomerOrders(customerId: string) {
   return { data: (data ?? []) as Order[], error };
 }
 
+export async function cancelCustomerOrder(orderId: string) {
+  return supabase
+    .from('orders')
+    .update({ status: 'cancelled' })
+    .eq('id', orderId)
+    .eq('status', 'pending')
+    .select()
+    .single();
+}
+
 export async function fetchOrder(orderId: string) {
   const { data, error } = await supabase
     .from('orders')
     .select(
-      '*, items:order_items(*), store:stores(*), address:addresses(*)'
+      '*, items:order_items(*), store:stores(*), address:addresses(*), delivery:delivery_assignments(*)'
     )
     .eq('id', orderId)
     .single();
-  return { data: data as Order | null, error };
+  if (error || !data) return { data: data as Order | null, error };
+
+  const order = data as Order & { delivery?: DeliveryAssignment[] | DeliveryAssignment | null };
+  const delivery = Array.isArray(order.delivery)
+    ? order.delivery[0] ?? null
+    : order.delivery ?? null;
+
+  const { data: history } = await fetchOrderStatusHistory(orderId);
+  return {
+    data: { ...order, delivery, status_history: history ?? [] } as Order,
+    error: null,
+  };
 }
 
 export async function ownerDashboard(storeId: string) {
@@ -367,7 +514,9 @@ export async function ownerDashboard(storeId: string) {
   const todayOrders = orders?.length ?? 0;
   const todaySales =
     orders
-      ?.filter((o) => ['accepted', 'out_for_delivery', 'delivered'].includes(o.status))
+      ?.filter((o) =>
+        ['accepted', 'preparing', 'packed', 'out_for_delivery', 'delivered'].includes(o.status)
+      )
       .reduce((s, o) => s + Number(o.total), 0) ?? 0;
   const pending =
     orders?.filter((o) => o.status === 'pending').length ?? 0;
@@ -381,41 +530,23 @@ export async function ownerDashboard(storeId: string) {
   const pendingKhata =
     khata?.reduce((s, k) => s + Number(k.balance), 0) ?? 0;
 
-  return { todayOrders, todaySales, pending, pendingKhata };
+  const { data: lowStock } = await supabase
+    .from('products')
+    .select('id')
+    .eq('store_id', storeId)
+    .eq('is_active', true)
+    .in('stock_status', ['low_stock', 'out_of_stock']);
+
+  return {
+    todayOrders,
+    todaySales,
+    pending,
+    pendingKhata,
+    lowStockCount: lowStock?.length ?? 0,
+  };
 }
 
 // ─── Khata ───────────────────────────────────────────────
-
-async function debitKhata(
-  storeId: string,
-  customerId: string,
-  amount: number,
-  orderId: string
-) {
-  const { data: acc } = await supabase
-    .from('khata_accounts')
-    .select('*')
-    .eq('store_id', storeId)
-    .eq('customer_id', customerId)
-    .maybeSingle();
-
-  if (!acc || !acc.is_enabled) return;
-
-  const balance = Number(acc.balance) + amount;
-  await supabase
-    .from('khata_accounts')
-    .update({ balance })
-    .eq('id', acc.id);
-
-  await supabase.from('khata_ledger').insert({
-    account_id: acc.id,
-    entry_type: 'debit',
-    amount,
-    balance_after: balance,
-    order_id: orderId,
-    note: 'Order charged to khata',
-  });
-}
 
 export async function fetchStoreKhata(storeId: string) {
   const { data, error } = await supabase

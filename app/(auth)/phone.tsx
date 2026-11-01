@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input, textStyles } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
 import { resolveAuthErrorKey } from '../../src/lib/authErrors';
+import { isDevBypassEnabled } from '../../src/lib/devAuth';
 import { getSupabaseConfigIssue } from '../../src/lib/supabase';
 import { useAuthStore } from '../../src/stores/authStore';
 
@@ -20,19 +21,33 @@ export default function PhoneScreen() {
   const { t, i18n } = useTranslation();
   const configIssue = useMemo(() => getSupabaseConfigIssue(), []);
   const sendOtp = useAuthStore((s) => s.sendOtp);
+  const stagePhone = useAuthStore((s) => s.stagePhone);
   const loading = useAuthStore((s) => s.loading);
   const setLanguage = useAuthStore((s) => s.setLanguage);
+  const devBypass = isDevBypassEnabled();
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
 
+  const digits = () => phone.replace(/\D/g, '');
+
   const onSend = async () => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length !== 10) {
+    if (digits().length !== 10) {
       setError(t('required'));
       return;
     }
     setError('');
-    const res = await sendOtp(digits);
+
+    if (devBypass) {
+      const res = stagePhone(digits());
+      if (res.error) {
+        setError(t('required'));
+        return;
+      }
+      router.push('/(auth)/otp');
+      return;
+    }
+
+    const res = await sendOtp(digits());
     if (res.error) {
       setError(resolveAuthErrorKey(t, res.error));
       return;
@@ -65,9 +80,15 @@ export default function PhoneScreen() {
           <Text style={styles.tagline}>{t('tagline')}</Text>
         </View>
 
-        {configIssue ? (
+        {configIssue && !devBypass ? (
           <View style={styles.configBanner}>
             <Text style={styles.configText}>{resolveAuthErrorKey(t, configIssue)}</Text>
+          </View>
+        ) : null}
+
+        {devBypass ? (
+          <View style={styles.devBanner}>
+            <Text style={styles.devBannerText}>{t('devBypassHint')}</Text>
           </View>
         ) : null}
 
@@ -81,7 +102,11 @@ export default function PhoneScreen() {
             onChangeText={setPhone}
             error={error}
           />
-          <Button title={t('sendOtp')} onPress={onSend} loading={loading} />
+          <Button
+            title={devBypass ? t('continue') : t('sendOtp')}
+            onPress={onSend}
+            loading={loading}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -121,4 +146,13 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
   },
   configText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  devBanner: {
+    backgroundColor: colors.warning + '22',
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  devBannerText: { color: colors.text, fontSize: 13, lineHeight: 20 },
 });

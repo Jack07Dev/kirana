@@ -19,6 +19,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="csv-upload" options={{ title: 'CSV' }} />
       <Stack.Screen name="order-detail" options={{ title: 'Order' }} />
       <Stack.Screen name="khata-detail" options={{ title: 'Khata' }} />
+      <Stack.Screen name="stock-history" options={{ title: 'Stock history' }} />
+      <Stack.Screen name="delivery-staff" options={{ title: 'Delivery staff' }} />
     </Stack>
   );
 }

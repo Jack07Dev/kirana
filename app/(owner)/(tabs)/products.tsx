@@ -94,6 +94,11 @@ export default function OwnerProducts() {
                     <Text style={styles.mrp}>  MRP {formatINR(Number(item.mrp))}</Text>
                   ) : null}
                 </Text>
+                {item.stock_qty != null ? (
+                  <Text style={styles.stockMeta}>
+                    {t('stockQtyLabel', { qty: item.stock_qty })}
+                  </Text>
+                ) : null}
               </View>
               <Pressable
                 onPress={async () => {
@@ -141,4 +146,5 @@ const styles = StyleSheet.create({
   name: { fontWeight: '700', fontSize: 16, color: colors.text },
   price: { marginTop: 4, fontWeight: '700', color: colors.primary, fontSize: 15 },
   mrp: { color: colors.textMuted, textDecorationLine: 'line-through', fontWeight: '400' },
+  stockMeta: { marginTop: 4, fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 });

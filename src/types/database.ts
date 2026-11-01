@@ -1,9 +1,11 @@
-export type UserRole = 'customer' | 'store_owner';
+export type UserRole = 'customer' | 'store_owner' | 'delivery_partner';
 export type StoreType = 'kirana' | 'sabzi' | 'medical' | 'restaurant' | 'other';
 export type StockStatus = 'in_stock' | 'out_of_stock' | 'low_stock';
 export type OrderStatus =
   | 'pending'
   | 'accepted'
+  | 'preparing'
+  | 'packed'
   | 'rejected'
   | 'out_for_delivery'
   | 'delivered'
@@ -12,6 +14,13 @@ export type PaymentMethod = 'cod' | 'upi' | 'khata';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export type KhataEntryType = 'debit' | 'credit' | 'adjustment';
 export type ReminderCycle = 'weekly' | 'monthly' | 'none';
+
+export type InventoryMovementType =
+  | 'sale'
+  | 'restock'
+  | 'adjustment'
+  | 'cancellation_release'
+  | 'status_override';
 
 export interface User {
   id: string;
@@ -89,6 +98,7 @@ export interface Product {
   discount_pct: number;
   stock_status: StockStatus;
   stock_qty: number | null;
+  reorder_threshold: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -128,11 +138,50 @@ export interface Order {
   accepted_at: string | null;
   out_for_delivery_at: string | null;
   delivered_at: string | null;
+  preparing_at?: string | null;
+  packed_at?: string | null;
+  inventory_restored?: boolean;
   created_at: string;
   updated_at: string;
   store?: Store;
   items?: OrderItem[];
   address?: Address;
+  delivery?: DeliveryAssignment | null;
+  status_history?: OrderStatusHistoryEntry[];
+}
+
+export interface DeliveryPartner {
+  id: string;
+  store_id: string;
+  user_id: string | null;
+  display_name: string;
+  phone: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DeliveryAssignment {
+  id: string;
+  order_id: string;
+  partner_id: string;
+  delivery_otp: string;
+  assigned_at: string;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+  otp_verified_at: string | null;
+  failed_reason: string | null;
+  partner?: DeliveryPartner;
+  order?: Order;
+}
+
+export interface OrderStatusHistoryEntry {
+  id: string;
+  order_id: string;
+  from_status: OrderStatus | null;
+  to_status: OrderStatus;
+  note: string | null;
+  changed_by: string | null;
+  created_at: string;
 }
 
 export interface OrderItem {
@@ -192,6 +241,19 @@ export interface Payment {
 export interface CartItem {
   product: Product;
   quantity: number;
+}
+
+export interface InventoryMovement {
+  id: string;
+  store_id: string;
+  product_id: string;
+  order_id: string | null;
+  movement_type: InventoryMovementType;
+  quantity_delta: number;
+  quantity_after: number | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface NearbyStore extends Store {

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '../../../src/components/ui';
+import { Badge, Button } from '../../../src/components/ui';
 import { colors, spacing } from '../../../src/constants/theme';
 import { formatINR, ORDER_STATUS_LABELS } from '../../../src/lib/format';
-import { fetchOrder } from '../../../src/lib/api';
+import { cancelCustomerOrder, fetchOrder } from '../../../src/lib/api';
 import { notifyLocal } from '../../../src/lib/notifications';
 import { supabase } from '../../../src/lib/supabase';
 import type { Order } from '../../../src/types/database';
@@ -40,12 +40,9 @@ export default function CustomerOrderDetail() {
         },
         (payload) => {
           const next = payload.new as Order;
-          setOrder((prev) => (prev ? { ...prev, ...next } : prev));
+          void load();
           const st = ORDER_STATUS_LABELS[next.status];
-          void notifyLocal(
-            t('orderUpdate'),
-            st?.[lang] ?? next.status
-          );
+          void notifyLocal(t('orderUpdate'), st?.[lang] ?? next.status);
         }
       )
       .subscribe();
@@ -53,7 +50,7 @@ export default function CustomerOrderDetail() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [id, lang, t]);
+  }, [id, lang, t, load]);
 
   if (!order) return <View style={styles.screen} />;
 
@@ -84,6 +81,52 @@ export default function CustomerOrderDetail() {
         <Row label={t('total')} value={formatINR(Number(order.total))} bold />
         <Row label={t('payment')} value={t(order.payment_method)} />
       </View>
+
+      {order.status === 'out_for_delivery' && order.delivery?.delivery_otp ? (
+        <View style={styles.otpBox}>
+          <Text style={styles.otpTitle}>{t('deliveryOtp')}</Text>
+          <Text style={styles.otpCode}>{order.delivery.delivery_otp}</Text>
+          <Text style={styles.otpHint}>{t('deliveryOtpHint')}</Text>
+        </View>
+      ) : null}
+
+      {(order.status_history ?? []).length > 0 ? (
+        <View style={styles.timeline}>
+          <Text style={styles.timelineTitle}>{t('orderTimeline')}</Text>
+          {(order.status_history ?? []).map((h) => {
+            const lbl = ORDER_STATUS_LABELS[h.to_status];
+            return (
+              <View key={h.id} style={styles.timelineRow}>
+                <Text style={styles.timelineStatus}>{lbl?.[lang] ?? h.to_status}</Text>
+                <Text style={styles.timelineTime}>
+                  {new Date(h.created_at).toLocaleString()}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {order.status === 'pending' ? (
+        <Button
+          title={t('cancelOrder')}
+          variant="danger"
+          onPress={() => {
+            Alert.alert(t('cancelOrder'), t('cancelOrderConfirm'), [
+              { text: t('cancel'), style: 'cancel' },
+              {
+                text: t('confirm'),
+                style: 'destructive',
+                onPress: async () => {
+                  const { error } = await cancelCustomerOrder(order.id);
+                  if (error) Alert.alert(t('error'), error.message);
+                  else load();
+                },
+              },
+            ]);
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -130,4 +173,25 @@ const styles = StyleSheet.create({
   rowLabel: { color: colors.textSecondary },
   rowValue: { color: colors.text, fontWeight: '600' },
   bold: { fontWeight: '800', color: colors.text, fontSize: 17 },
+  otpBox: {
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  otpTitle: { fontWeight: '700', color: colors.textSecondary },
+  otpCode: {
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: 8,
+    color: colors.primary,
+    marginVertical: spacing.sm,
+  },
+  otpHint: { textAlign: 'center', color: colors.textSecondary, lineHeight: 20 },
+  timeline: { marginTop: spacing.lg, gap: 8 },
+  timelineTitle: { fontWeight: '800', color: colors.text },
+  timelineRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  timelineStatus: { fontWeight: '600', color: colors.text },
+  timelineTime: { color: colors.textMuted, fontSize: 12 },
 });

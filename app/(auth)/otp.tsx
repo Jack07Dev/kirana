@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input, textStyles } from '../../src/components/ui';
 import { colors, spacing } from '../../src/constants/theme';
 import { resolveAuthErrorKey } from '../../src/lib/authErrors';
+import { isDevBypassEnabled } from '../../src/lib/devAuth';
 import { formatPhone } from '../../src/lib/format';
 import { useAuthStore } from '../../src/stores/authStore';
 
@@ -15,6 +16,7 @@ export default function OtpScreen() {
   const sendOtp = useAuthStore((s) => s.sendOtp);
   const phone = useAuthStore((s) => s.phone);
   const loading = useAuthStore((s) => s.loading);
+  const devBypass = isDevBypassEnabled();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
 
@@ -23,6 +25,7 @@ export default function OtpScreen() {
       setError(t('required'));
       return;
     }
+    setError('');
     const res = await verifyOtp(otp);
     if (res.error) {
       setError(resolveAuthErrorKey(t, res.error));
@@ -32,6 +35,7 @@ export default function OtpScreen() {
   };
 
   const onResend = async () => {
+    if (devBypass) return;
     const digits = phone.replace(/\D/g, '').slice(-10);
     if (digits.length !== 10) return;
     setError('');
@@ -43,7 +47,11 @@ export default function OtpScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <Text style={textStyles.h1}>{t('enterOtp')}</Text>
-        <Text style={styles.sub}>{t('otpSent', { phone: formatPhone(phone) })}</Text>
+        <Text style={styles.sub}>
+          {devBypass
+            ? t('devOtpHint', { phone: formatPhone(phone) })
+            : t('otpSent', { phone: formatPhone(phone) })}
+        </Text>
         <Input
           keyboardType="number-pad"
           maxLength={6}
@@ -54,8 +62,12 @@ export default function OtpScreen() {
           style={{ letterSpacing: 8, fontSize: 24, textAlign: 'center' }}
         />
         <Button title={t('verifyOtp')} onPress={onVerify} loading={loading} />
-        <View style={{ height: spacing.md }} />
-        <Button title={t('resendOtp')} variant="ghost" onPress={onResend} loading={loading} />
+        {!devBypass ? (
+          <>
+            <View style={{ height: spacing.md }} />
+            <Button title={t('resendOtp')} variant="ghost" onPress={onResend} loading={loading} />
+          </>
+        ) : null}
       </View>
     </SafeAreaView>
   );

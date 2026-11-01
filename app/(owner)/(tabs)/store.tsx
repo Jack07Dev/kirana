@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '../../../src/components/ui';
@@ -133,6 +134,13 @@ export default function OwnerStoreSettings() {
 
       <Input label={t('upiId')} value={upi} onChangeText={setUpi} autoCapitalize="none" />
       <Button title={t('save')} onPress={save} loading={saving} />
+
+      <View style={{ height: spacing.md }} />
+      <Button
+        title={t('manageDeliveryStaff')}
+        variant="secondary"
+        onPress={() => router.push('/(owner)/delivery-staff')}
+      />
 
       <View style={{ height: spacing.xl }} />
       <Text style={styles.label}>{t('language')}</Text>
